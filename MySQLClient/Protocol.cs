@@ -1,0 +1,153 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace MySQLClient
+{
+    [Flags]
+    public enum CapabilityFlags : UInt32
+    {
+        CLIENT_LONG_PASSWORD = 0x00000001,
+        CLIENT_FOUND_ROWS = 0x00000002,
+        CLIENT_LONG_FLAG = 0x00000004,
+        CLIENT_CONNECT_WITH_DB = 0x00000008,
+        CLIENT_NO_SCHEMA = 0x00000010,
+        CLIENT_COMPRESS = 0x00000020,
+        CLIENT_ODBC = 0x00000040,
+        CLIENT_LOCAL_FILES = 0x00000080,
+        CLIENT_IGNORE_SPACE = 0x00000100,
+        CLIENT_PROTOCOL_41 = 0x00000200,
+        CLIENT_INTERACTIVE = 0x00000400,
+        CLIENT_SSL = 0x00000800,
+        CLIENT_IGNORE_SIGPIPE = 0x00001000,
+        CLIENT_TRANSACTIONS = 0x00002000,
+        CLIENT_RESERVED = 0x00004000,
+        CLIENT_SECURE_CONNECTION = 0x00008000,
+        CLIENT_MULTI_STATEMENTS = 0x00010000,
+        CLIENT_MULTI_RESULTS = 0x00020000,
+        CLIENT_PS_MULTI_RESULTS = 0x00040000,
+        CLIENT_PLUGIN_AUTH = 0x00080000,
+        CLIENT_CONNECT_ATTRS = 0x00100000,
+        CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA = 0x00200000,
+        CLIENT_CAN_HANDLE_EXPIRED_PASSWORDS = 0x00400000,
+        CLIENT_SESSION_TRACK = 0x00800000,
+        CLIENT_DEPRECATE_EOF = 0x01000000,
+        CLIENT_0x02000000 = 0x02000000,
+        CLIENT_0x04000000 = 0x04000000,
+        CLIENT_0x08000000 = 0x08000000,
+        CLIENT_0x10000000 = 0x10000000,
+        CLIENT_PROGRESS = 0x20000000,
+        CLIENT_SSL_VERIFY_SERVER_CERT = 0x40000000,
+        CLIENT_REMEMBER_OPTIONS = 0x80000000
+    }
+    [Flags]
+    enum ServerStatusFlags
+    {
+        SERVER_STATUS_IN_TRANS = 0x0001, // a transaction is active
+        SERVER_STATUS_AUTOCOMMIT = 0x0002, // auto-commit is enabled
+        SERVER_MORE_RESULTS_EXISTS = 0x0008,
+        SERVER_STATUS_NO_GOOD_INDEX_USED = 0x0010,
+        SERVER_STATUS_NO_INDEX_USED = 0x0020,
+        SERVER_STATUS_CURSOR_EXISTS = 0x0040, //Used by Binary Protocol Resultset to signal that COM_STMT_FETCH must be used to fetch the row-data.
+        SERVER_STATUS_LAST_ROW_SENT = 0x0080,
+        SERVER_STATUS_DB_DROPPED = 0x0100,
+        SERVER_STATUS_NO_BACKSLASH_ESCAPES = 0x0200,
+        SERVER_STATUS_METADATA_CHANGED = 0x0400,
+        SERVER_QUERY_WAS_SLOW = 0x0800,
+        SERVER_PS_OUT_PARAMS = 0x1000,
+        SERVER_STATUS_IN_TRANS_READONLY = 0x2000,
+        SERVER_SESSION_STATE_CHANGED = 0x4000
+    }
+
+    enum ServerCommand : byte
+    {
+        COM_SLEEP,
+        COM_QUIT,
+        COM_INIT_DB,
+        COM_QUERY,
+        COM_FIELD_LIST,
+        COM_CREATE_DB,
+        COM_DROP_DB,
+        COM_REFRESH,
+        COM_SHUTDOWN,
+        COM_STATISTICS,
+        COM_PROCESS_INFO,
+        COM_CONNECT,
+        COM_PROCESS_KILL,
+        COM_DEBUG,
+        COM_PING,
+        COM_TIME,
+        COM_DELAYED_INSERT,
+        COM_CHANGE_USER,
+        COM_BINLOG_DUMP,
+        COM_TABLE_DUMP,
+        COM_CONNECT_OUT,
+        COM_REGISTER_SLAVE,
+        COM_STMT_PREPARE,
+        COM_STMT_EXECUTE,
+        COM_STMT_SEND_LONG_DATA,
+        COM_STMT_CLOSE,
+        COM_STMT_RESET,
+        COM_SET_OPTION,
+        COM_STMT_FETCH,
+        COM_DAEMON,
+        COM_END
+    };
+
+    public enum DataType
+    {
+        MYSQL_TYPE_DECIMAL = 0x00,
+        MYSQL_TYPE_TINY = 0x01,
+        MYSQL_TYPE_SHORT = 0x02,
+        MYSQL_TYPE_LONG = 0x03,
+        MYSQL_TYPE_FLOAT = 0x04,
+        MYSQL_TYPE_DOUBLE = 0x05,
+        MYSQL_TYPE_NULL = 0x06,
+        MYSQL_TYPE_TIMESTAMP = 0x07,
+        MYSQL_TYPE_LONGLONG = 0x08,
+        MYSQL_TYPE_INT24 = 0x09,
+        MYSQL_TYPE_DATE = 0x0a,
+        MYSQL_TYPE_TIME = 0x0b,
+        MYSQL_TYPE_DATETIME = 0x0c,
+        MYSQL_TYPE_YEAR = 0x0d,
+        MYSQL_TYPE_NEWDATE = 0x0e,
+        MYSQL_TYPE_VARCHAR = 0x0f,
+        MYSQL_TYPE_BIT = 0x10,
+        MYSQL_TYPE_TIMESTAMP2 = 0x11,
+        MYSQL_TYPE_DATETIME2 = 0x12,
+        MYSQL_TYPE_TIME2 = 0x13,
+        MYSQL_TYPE_NEWDECIMAL = 0xf6,
+        MYSQL_TYPE_ENUM = 0xf7,
+        MYSQL_TYPE_SET = 0xf8,
+        MYSQL_TYPE_TINY_BLOB = 0xf9,
+        MYSQL_TYPE_MEDIUM_BLOB = 0xfa,
+        MYSQL_TYPE_LONG_BLOB = 0xfb,
+        MYSQL_TYPE_BLOB = 0xfc,
+        MYSQL_TYPE_VAR_STRING = 0xfd,
+        MYSQL_TYPE_STRING = 0xfe,
+        MYSQL_TYPE_GEOMETRY = 0xff
+    }
+
+    [Flags]
+    public enum FieldFlags:ushort
+    {
+        NOT_NULL = 0x0001,
+        PRIMARY_KEY = 0x0002,
+        UNIQUE_KEY = 0x0004,
+        MULTIPLE_KEY = 0x0008,
+        BLOB = 0x0010,
+        UNSIGNED = 0x0020,
+        DECIMAL = 0x0040,
+        BINARY_COLLATION = 0x0080,
+        ENUM = 0x0100,
+        AUTO_INCREMENT = 0x0200,
+        TIMESTAMP = 0x0400,
+        SET = 0x0800,
+        FLAG_01000 = 0x1000,
+        FLAG_02000 = 0x2000,
+        FLAG_04000 = 0x4000,
+        FLAG_08000 = 0x8000
+    }
+}
