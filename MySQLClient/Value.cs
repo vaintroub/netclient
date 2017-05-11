@@ -12,58 +12,34 @@ namespace MySQLClient
     class ValueStream : Stream
     {
         long length;
-        int position;
-        PacketReader reader;
-        public ValueStream(PacketReader r, long length)
+        long position;
+        internal PacketReader reader;
+        public ValueStream()
         {
-            this.length = length;
+        }
+        public void Init(PacketReader r)
+        {
+            this.reader = r;
+            length = reader.ReadIntLenenc();
+            if (length == PacketReader.NULL_VALUE_LENENC)
+            {
+                IsDBNull = true;
+                length = 0;
+            }
+            else
+            {
+                IsDBNull = false;
+            }
             position = 0;
-            reader = r;
         }
-        public override bool CanRead
-        {
-            get
-            {
-                return true;
-            }
-        }
-
-        public override bool CanSeek
-        {
-            get
-            {
-                return false;
-            }
-        }
-
-        public override bool CanWrite
-        {
-            get
-            {
-                return false;
-            }
-        }
-
-        public override long Length
-        {
-            get
-            {
-                return length;
-            }
-        }
-
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => length;
         public override long Position
-        {
-            get
-            {
-                return position;
-            }
+        { get => position; set => throw new InvalidOperationException(); }
 
-            set
-            {
-                throw new NotImplementedException();
-            }
-        }
+        public bool IsDBNull { get; private set; }
 
         public override void Flush()
         {
@@ -104,58 +80,117 @@ namespace MySQLClient
             position++;
             return ret;
         }
+
+        public void Skip()
+        {
+            reader.Skip((int)(length - position));
+        }
     }
 
-    internal class TextEncodedValue
+    public enum RowAccessType
     {
-        public static Stream GetStream(PacketReader r, long len)
+        Random,
+        Sequential
+    }
+
+    public class Row
+    {
+        int currentPos;
+        ValueStream valueStream = new ValueStream();
+        PacketReader reader;
+
+        internal  void Init(PacketReader r, RowAccessType type)
         {
-            return new ValueStream(r, len);
+            this.reader = r;
+
+            // Copy packet into memory stream,for random access
+            if (type == RowAccessType.Random)
+            {
+                byte[] buf = new byte[r.Remaining];
+                r.ReadFully(buf, 0, buf.Length);
+                this.reader = new PacketReader();
+                reader.stream = new MemoryStream(buf);
+                reader.size = buf.Length;
+            }
+            currentPos = 0;
         }
 
-        public static TextReader GetReader(PacketReader r, long len)
+
+        public Stream GetValue(int pos)
         {
-            return new StreamReader(GetStream(r,len), Encoding.UTF8);
+            if (valueStream.Length != valueStream.Position)
+            {
+                valueStream.Skip();
+            }
+
+            if (currentPos > pos)
+            {
+                /*
+                 To lookup previous value (in non-sequential access case)
+                 we go back to the start of the row, and skip to current position
+                */
+                reader.Rewind();
+                currentPos = 0;
+            }
+
+            while (currentPos < pos)
+            {
+                valueStream.Init(reader);
+                valueStream.Skip();
+                currentPos++;
+            }
+            valueStream.Init(reader);
+            currentPos++;
+            if (valueStream.IsDBNull)
+                return null;
+            return valueStream;
+        }
+    }
+
+    public class TextEncodedValue
+    {
+        public static TextReader GetReader(Stream stream)
+        {
+            return new StreamReader(stream, Encoding.UTF8);
         }
 
-        public static long GetLong(PacketReader r, long len)
+        public static long GetLong(Stream stream)
         {
-            int firstByte = r.ReadByte();
+            int firstByte = stream.ReadByte();
 
             long sign = (firstByte == '-')?-1:1;
-            long val = (firstByte == '-') ? 0 : firstByte;
-            for (int i = 0; i < len - 1; i++)
+            long val = (firstByte == '-') ? 0 : firstByte-'0';
+            for (int i = 1; i < stream.Length; i++)
             {
-                int digit = r.ReadByte() - '0';
+                int digit = stream.ReadByte() - '0';
                 Debug.Assert(digit >= 0 && digit <= 9);
                 val = 10 * val + sign * digit;
             }
             return val;
         }
 
-        public static ulong GetULong(PacketReader r, long len)
+        public static ulong GetULong(Stream stream)
         {
             ulong val = 0;
-            for (int i = 0; i < len - 1; i++)
+            for (int i = 0; i < stream.Length; i++)
             {
-                int digit = r.ReadByte() - '0';
+                int digit = stream.ReadByte() - '0';
                 Debug.Assert(digit >= 0 && digit <= 9);
                 val = 10 * val + (ulong)digit;
             }
             return val;
         }
         
-        public static byte[] GetBytes(PacketReader r, long len)
+        public static byte[] GetBytes(Stream stream)
         {
-            byte[] b = new byte[len];
-            r.ReadFully(b, 0, (int)len);
+            byte[] b = new byte[stream.Length- stream.Position];
+            stream.Read(b, 0, b.Length);
             return b;
         }
 
-        public static string GetString(PacketReader r, long len)
+        public static string GetString(Stream stream)
         {
-            return Encoding.UTF8.GetString(GetBytes(r, len));
+            return Encoding.UTF8.GetString(GetBytes(stream));
         }
-
     }
 }

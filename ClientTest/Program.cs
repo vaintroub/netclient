@@ -76,7 +76,7 @@ namespace ClientTest
                         ResultSetMetaData metadata = new ResultSetMetaData();
                         c.ReadResultSetMetaData(metadata);
                         int N = metadata.columnDefinitions.Count;
-                        while (await c.NextRowAsync())
+                        while (await c.NextRowAsync(RowAccessType.Sequential) != null)
                         {
                             //string s = c.ReadString();
                         }
@@ -127,10 +127,8 @@ namespace ClientTest
             c.ReadResultSetMetaData(metadata);
             int len = metadata.columnDefinitions[0].ColumnLength;
             int N = metadata.columnDefinitions.Count;
-            string s1;
-            while(c.NextRow())
+            while(c.NextRow(RowAccessType.Sequential) != null)
             {
-                 s1 = c.ReadString();
             }
             c.Disconnect();
         }

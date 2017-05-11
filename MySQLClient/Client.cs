@@ -20,9 +20,6 @@ namespace MySQLClient
         AuthSwitch
     }
 
-
- 
-
     class MySQLException : DbException
     {
         public readonly string SQLState;
@@ -49,13 +46,13 @@ namespace MySQLClient
         public int seqNo;
         public int size;
 
-        int pos;
+        internal int pos;
 
         byte[] header = new byte[4];
         byte[] byteBuf = new byte[BUFSIZ];
         int peekedByte = -1;
 
-        PacketReader(Stream s)
+        public PacketReader(Stream s)
         {
             stream = s;
         }
@@ -68,7 +65,7 @@ namespace MySQLClient
         {
             return size == MAX_SIZE;
         }
-        int Remaining
+        internal int Remaining
         {
             get { return size - pos; }
         }
@@ -100,7 +97,7 @@ namespace MySQLClient
         private void SetSizeAndSeqNo()
         {
             size = (((int)header[0])) | (((int)header[1]) << 8) | (((int)header[2]) << 16);
-            seqNo = byteBuf[4];
+            seqNo = header[3];
             pos = 0;
         }
 
@@ -215,8 +212,31 @@ namespace MySQLClient
 
         public void Skip(int count)
         {
-            while (count > 0)
-                count -= Read(byteBuf, 0, Math.Min(count, BUFSIZ));
+            if (count > Remaining)
+                throw new EndOfStreamException();
+
+            if (stream.CanSeek)
+            {
+                stream.Seek(count, SeekOrigin.Current);
+            }
+            else
+            {
+                while (count > 0)
+                    count -= Read(byteBuf, 0, Math.Min(count, BUFSIZ));
+            }
+        }
+
+        public void Rewind()
+        {
+            if (stream.CanSeek)
+            {
+                stream.Seek(0, SeekOrigin.Begin);
+                pos = 0;
+            }
+            else
+            {
+                throw new InvalidOperationException("Non-sequential access detected");
+            }
         }
 
         /// Skip remaining bytes in this packet
@@ -414,13 +434,16 @@ namespace MySQLClient
         TcpClient tcpClient = new TcpClient();
         PacketReader reader = new PacketReader();
         PacketWriter writer = new PacketWriter();
-
+        ValueStream valueStream = new ValueStream();
+        Row row = new Row();
         bool inBatchMode;
 
         public bool IsClosed
         {
             get; private set;
         } = true;
+
+        public ServerStatusFlags ServerStatus { get => serverStatusFlags; private set => serverStatusFlags = value; }
 
         int fieldCount;
         string serverVersion;
@@ -453,7 +476,7 @@ namespace MySQLClient
         void NotInBatchMode()
         {
             if (inBatchMode)
-                throw new MySQLException("Operation disallowed in batch mode. Only SendXXX() APIs are allowed until EndBatch()");
+                throw new MySQLException("Operation disallowed in batch mode. Only Send() APIs are allowed until EndBatch()");
         }
         void ReadPacketHeader()
         {
@@ -565,7 +588,7 @@ namespace MySQLClient
         {
             affectedRows = reader.ReadIntLenenc();
             lastInsertId = reader.ReadIntLenenc();
-            serverStatusFlags = (ServerStatusFlags)reader.ReadInt2();
+            ServerStatus = (ServerStatusFlags)reader.ReadInt2();
             warnings = (short)reader.ReadInt2();
             reader.Skip();
         }
@@ -602,7 +625,7 @@ namespace MySQLClient
         void ReadEOF()
         {
             warnings = (short)reader.ReadInt2();
-            serverStatusFlags = (ServerStatusFlags)reader.ReadInt2();
+            ServerStatus = (ServerStatusFlags)reader.ReadInt2();
             reader.Skip();
         }
  
@@ -626,30 +649,42 @@ namespace MySQLClient
             }
             return true;
         }
-        public bool NextRow()
+        public Row NextRow(RowAccessType type)
         {
             reader.Skip();
             ReadPacketHeader();
-            return HasMoreRows();
+            if (HasMoreRows())
+            {
+                row.Init(reader, type);
+                return row;
+            }
+            return null;
         }
-        public async Task<bool> NextRowAsync()
+        public async Task<Row> NextRowAsync(RowAccessType type)
         {
             reader.Skip();
             await ReadPacketHeaderAsync();
-            return HasMoreRows();
+            if (HasMoreRows())
+            {
+                row.Init(reader, type);
+                return row;
+            }
+            return null;
         }
 
         public string ReadString()
         {
             long len = reader.ReadIntLenenc();
-            if (len == 0xfb)
+            if (len == PacketReader.NULL_VALUE_LENENC)
                 return null;
-            return TextEncodedValue.GetString(reader, len);
+            valueStream.Init(reader);
+            return TextEncodedValue.GetString(valueStream);
         }
 
         public async Task<ServerResponseType> ReceiveServerResponseAsync()
         {
             await ReadPacketHeaderAsync();
+
             return ReadFieldCount();
         }
 

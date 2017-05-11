@@ -43,7 +43,7 @@ namespace MySQLClient
         CLIENT_REMEMBER_OPTIONS = 0x80000000
     }
     [Flags]
-    enum ServerStatusFlags
+    public enum ServerStatusFlags
     {
         SERVER_STATUS_IN_TRANS = 0x0001, // a transaction is active
         SERVER_STATUS_AUTOCOMMIT = 0x0002, // auto-commit is enabled
@@ -61,7 +61,7 @@ namespace MySQLClient
         SERVER_SESSION_STATE_CHANGED = 0x4000
     }
 
-    enum ServerCommand : byte
+    public enum ServerCommand : byte
     {
         COM_SLEEP,
         COM_QUIT,
