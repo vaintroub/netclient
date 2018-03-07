@@ -108,28 +108,37 @@ namespace ClientTest
             cp.password = "";
             cp.user = "root";
             cp.port = 3306;
+            //cp.pipe = "MySQL";
             c.Connect(cp);
             c.SendQuery("set net_write_timeout=99999");
             ServerResponseType responseType = c.ReceiveServerResponse();
             Debug.Assert(responseType == ServerResponseType.Ok);
-
-            //StringBuilder sb = new StringBuilder("do 1 /*");
-            //while (sb.Length != 0xffffff - 3)
-            //    sb.Append('a');
-            //sb.Append("*/");
-            //c.SendQuery(sb.ToString());
-            //c.ReadOk();
-
-            c.SendQuery("select repeat('a',10)");
+            c.SendQuery("use test");
             responseType = c.ReceiveServerResponse();
-            Debug.Assert(responseType == ServerResponseType.ResultSet);
-            ResultSetMetaData metadata = new ResultSetMetaData();
-            c.ReadResultSetMetaData(metadata);
-            int len = metadata.columnDefinitions[0].ColumnLength;
-            int N = metadata.columnDefinitions.Count;
-            while(c.NextRow(RowAccessType.Sequential) != null)
+            Debug.Assert(responseType == ServerResponseType.Ok);
+
+            byte[] query = Encoding.UTF8.GetBytes("select REPEAT('a', 500000000) from seq_1_to_10");
+            ResultSetMetaData rsmd = new ResultSetMetaData();
+            Row r;
+
+            Stopwatch sw = Stopwatch.StartNew();
+            for (int i = 0; i < 1; i++)
             {
+                c.SendQuery(query);
+                c.ReceiveServerResponse();
+
+                c.ReadResultSetMetaData(rsmd);
+
+                while ((r = c.NextRow(RowAccessType.Sequential)) != null)
+                {
+                    System.IO.Stream s = r.GetValue(0);
+                    if (s.Length != 500000000)
+                        throw new Exception("foo");
+                    s.Close();
+                }
+
             }
+            Console.WriteLine(sw.Elapsed);
             c.Disconnect();
         }
     }

@@ -8,6 +8,7 @@ using System.Net.Sockets;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
+using System.IO.Pipes;
 
 namespace MySQLClient
 {
@@ -86,7 +87,7 @@ namespace MySQLClient
         {
             while (count > 0)
             {
-                int n = await s.ReadAsync(buffer, offset, count);
+                int n = await s.ReadAsync(buffer, offset, count).ConfigureAwait(false);
                 if (n <= 0)
                     throw new EndOfStreamException();
                 count -= n;
@@ -109,7 +110,7 @@ namespace MySQLClient
 
         public async Task ReadPacketHeaderAsync()
         {
-            await ReadFullyAsync(stream, header, 0, 4);
+            await ReadFullyAsync(stream, header, 0, 4).ConfigureAwait(false);
             SetSizeAndSeqNo();
         }
 
@@ -426,12 +427,57 @@ namespace MySQLClient
         public string host;
         public int port;
         public string database;
+        public string pipe;
     }
 
+    interface ITransport
+    {
+        Stream GetStream(ClientParams p);
+        Task<Stream> GetStreamAsync(ClientParams p);
+    }
+
+    class TCPTransport : ITransport
+    {
+        TcpClient MakeClient(ClientParams p)
+        {
+            TcpClient tcpClient = new TcpClient();
+            tcpClient.Client.NoDelay = true;
+            return tcpClient;
+        }
+
+        public Stream GetStream(ClientParams p)
+        {
+            TcpClient tcpClient = MakeClient(p);
+            tcpClient.Connect(p.host, p.port);
+            return tcpClient.GetStream();
+        }
+
+        public async Task<Stream> GetStreamAsync(ClientParams p)
+        {
+            TcpClient tcpClient = MakeClient(p);
+            await tcpClient.ConnectAsync(p.host, p.port);
+            return tcpClient.GetStream();
+        }
+    }
+
+    class PipeTransport : ITransport
+    {
+        public Stream GetStream(ClientParams p)
+        {
+            NamedPipeClientStream s = new NamedPipeClientStream(p.pipe);
+            s.Connect();
+            return s;
+        }
+
+        public Task<Stream> GetStreamAsync(ClientParams p)
+        {
+            return Task.FromResult(GetStream(p));
+        }
+    }
 
     public class Client:IDisposable
     {
-        TcpClient tcpClient = new TcpClient();
+        Stream clientStream;
         PacketReader reader = new PacketReader();
         PacketWriter writer = new PacketWriter();
         ValueStream valueStream = new ValueStream();
@@ -468,8 +514,8 @@ namespace MySQLClient
             Debug.Assert(inBatchMode);
             batchStream.SetLength(writer.stream.Position);
             writer.stream.Position = 0;
-            writer.stream.CopyTo(tcpClient.GetStream());
-            writer.stream = tcpClient.GetStream();
+            writer.stream.CopyTo(clientStream);
+            writer.stream = clientStream;
             inBatchMode = false;
         }
 
@@ -532,7 +578,6 @@ namespace MySQLClient
         void HandleIOException(IOException e, bool isRead)
         {
             IsClosed = true;
-            tcpClient.Close();
             throw new MySQLException(e.Message, 2013, "HY000");
         }
 
@@ -702,11 +747,13 @@ namespace MySQLClient
             await ReadPacketHeaderAsync();
         }
 
-        void SetupTCPParams()
+
+        static ITransport GetTransport(ClientParams p)
         {
-            reader.stream = new BufferedStream(tcpClient.GetStream());
-            writer.stream = tcpClient.GetStream();
-            tcpClient.Client.NoDelay = true;
+            if (p.pipe != null)
+                return new PipeTransport();
+
+            return new TCPTransport();
         }
 
         void ProcessInitialAuthPacket(ClientParams p)
@@ -716,10 +763,16 @@ namespace MySQLClient
             writer.seqNo = reader.seqNo + 1;
         }
 
+        void SetupStreams(Stream s)
+        {
+            clientStream = s;
+            writer.stream = s;
+            reader.stream = new BufferedStream(s,16*1024*1024);
+        }
+ 
         public void Connect(ClientParams p)
         {
-            tcpClient.Connect(p.host, p.port);
-            SetupTCPParams();
+            SetupStreams(GetTransport(p).GetStream(p));
 
             ReadPacketHeader();
             ProcessInitialAuthPacket(p);
@@ -730,9 +783,8 @@ namespace MySQLClient
 
         public async Task ConnectAsync(ClientParams p)
         {
-            await tcpClient.ConnectAsync(p.host, p.port);
-            SetupTCPParams();
-
+            Stream s = await GetTransport(p).GetStreamAsync(p).ConfigureAwait(false);
+            SetupStreams(s);
             ReadPacketHeader();
             ProcessInitialAuthPacket(p);
             SendPacket();
@@ -744,14 +796,14 @@ namespace MySQLClient
         {
             writer.WriteByte((byte)ServerCommand.COM_QUIT);
             SendPacket();
-            tcpClient.Close();
+            clientStream.Close();
         }
 
         public async Task DisconnectAsync()
         {
             writer.WriteByte((byte)ServerCommand.COM_QUIT);
             await SendPacketAsync();
-            tcpClient.Close();
+            clientStream.Close();
         }
 
         public void Ping()
@@ -769,9 +821,14 @@ namespace MySQLClient
 
         public void SendQuery(String query)
         {
+            SendQuery(Encoding.UTF8.GetBytes(query));
+        }
+
+        public void SendQuery(byte[] query)
+        {
             writer.seqNo = 0;
             writer.WriteByte((byte)ServerCommand.COM_QUERY);
-            writer.WriteString(query);
+            writer.WriteBytes(query, 0, query.Length);
             SendPacket();
         }
 
@@ -869,7 +926,7 @@ namespace MySQLClient
 
         public void Dispose()
         {
-            tcpClient.Close();
+            clientStream?.Close();
             batchStream.Close();
         }
     }

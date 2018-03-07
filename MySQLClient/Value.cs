@@ -71,6 +71,7 @@ namespace MySQLClient
         public override void Close()
         {
             reader.Skip();
+            position = length;
         }
         public override int ReadByte()
         {
@@ -84,6 +85,7 @@ namespace MySQLClient
         public void Skip()
         {
             reader.Skip((int)(length - position));
+            position = length;
         }
     }
 

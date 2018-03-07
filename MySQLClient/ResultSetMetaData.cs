@@ -10,22 +10,22 @@ namespace MySQLClient
 {
     class ColumnDefinitionData
     {
-        public string schema;
-        public string table;
-        public string originalTable;
-        public string name;
-        public string originalName;
+        public ArraySegment<byte> schema;
+        public ArraySegment<byte> table;
+        public ArraySegment<byte> originalTable;
+        public ArraySegment<byte> name;
+        public ArraySegment<byte> originalName;
         public int charset;
         public int columnLength;
         public DataType type;
         public FieldFlags flags;
         public int decimals;
 
-        private static string ReadStringLenEnc(byte[] bytes, ref int pos)
+        private static ArraySegment<byte> ReadStringLenEnc(byte[] bytes, ref int pos)
         {
             int len = bytes[pos];
             pos++;
-            string val = Encoding.UTF8.GetString(bytes, pos, len);
+            ArraySegment<byte> val = new ArraySegment<byte>(bytes, pos, len);
             pos += len;
             return val;
         }
@@ -81,11 +81,15 @@ namespace MySQLClient
                 return data;
             }
         }
-        public string Schema { get { return Data.schema; } }
-        public string Table { get { return Data.table; } }
-        public string OriginalTable { get { return Data.originalTable; } }
-        public string Name { get { return Data.name; } }
-        public string OriginalName { get { return Data.originalName; } }
+        private String ArraySegmentToString(ArraySegment<byte> a)
+        {
+            return Encoding.UTF8.GetString(a.Array, a.Offset, a.Count);
+        }
+        public string Schema { get { return ArraySegmentToString(Data.schema); } }
+        public string Table { get { return ArraySegmentToString(Data.table); } }
+        public string OriginalTable { get { return ArraySegmentToString(Data.originalTable); } }
+        public string Name { get { return ArraySegmentToString(Data.name); } }
+        public string OriginalName { get { return ArraySegmentToString(Data.originalName); } }
         public int Charset { get { return Data.charset; } }
         public int ColumnLength { get { return Data.columnLength; } }
         public DataType Type { get { return Data.type; } }
