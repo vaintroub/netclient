@@ -767,7 +767,7 @@ namespace MySQLClient
         {
             clientStream = s;
             writer.stream = s;
-            reader.stream = new BufferedStream(s,16*1024*1024);
+            reader.stream = new BufferedStream(s);
         }
  
         public void Connect(ClientParams p)
